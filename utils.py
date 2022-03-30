@@ -1,14 +1,17 @@
 import json
 import config
+import os
 
 
 def read_json(filename):
-    with open(filename, 'r', encoding="utf-8") as file:
+    _filename = os.path.join(config.SITE_ROOT, 'data', filename)
+    with open(_filename, 'r', encoding="utf-8") as file:
         return json.load(file)
 
 
 def save_json(filename, data):
-    with open(filename, 'w', encoding="utf-8") as file:
+    _filename = os.path.join(config.SITE_ROOT, 'data', filename)
+    with open(_filename, 'w', encoding="utf-8") as file:
         if isinstance(data, set):
             return json.dump(data, file, cls=SetEncoder, ensure_ascii=False, indent=4)
         else:
@@ -23,26 +26,32 @@ class SetEncoder(json.JSONEncoder):
 
 
 class BookmarkManager:
+    """Class to handle common operations with bookmarks"""
 
     def __init__(self):
-        self.bookmarks_path = config.BOOKMARKS_PATH
+        self.bookmarks_path = config.BOOKMARKS_FILE
 
     def add_bookmark(self, post_id):
+        """Method receives post_id, read json with bookmarks
+           and add post_id to the list.Then convert it to set when serialize to json """
 
         bookmarks = read_json(self.bookmarks_path)
         bookmarks.append(post_id)
         save_json(self.bookmarks_path, set(bookmarks))
 
     def remove_bookmark(self, post_id):
+        """Method receives post_id, read json with bookmarks
+                   and remove post_id from the list.Then convert it to set when serialize to json """
 
         bookmarks = read_json(self.bookmarks_path)
         bookmarks.remove(post_id)
         save_json(self.bookmarks_path, set(bookmarks))
 
-    def get_bookmarks(self):
+    def get_bookmarks(self) -> list:
+        """Method get list of bookmarks( post IDs)"""
         return read_json(self.bookmarks_path)
 
-    def get_bookmarks_num(self):
+    def get_bookmarks_num(self) -> int:
         bookmarks = read_json(self.bookmarks_path)
         if bookmarks:
             return len(bookmarks)
@@ -51,12 +60,14 @@ class BookmarkManager:
 
 
 class PostManager:
+    """Class to handle common operations with posts"""
 
     def __init__(self):
-        self.posts_path = config.POSTS_PATH
-        self.comments_path = config.COMMENTS_PATH
+        self.posts_path = config.POSTS_FILE
+        self.comments_path = config.COMMENTS_FILE
 
     def load_posts(self) -> dict:
+        """Method read jsons with posts and comments and creates Post objects"""
 
         posts_dict = {}
         posts = read_json(self.posts_path)
@@ -89,15 +100,18 @@ class PostManager:
                 )
         return posts_dict
 
-    def get_all_posts(self) -> list:
+    def get_all_posts(self) -> dict:
+        """Method returns list of all posts"""
         posts = self.load_posts()
         return posts
 
     def get_post_by_pk(self, pk) -> object:
+        """Method returns post by id"""
         posts = self.load_posts()
         return posts[pk]
 
     def get_posts_by_user(self, user_name) -> list:
+        """Method returns list of all posts authored by user"""
         found_posts = []
         posts = self.load_posts()
         for post in posts.values():
@@ -107,6 +121,7 @@ class PostManager:
             return found_posts
 
     def get_bookmarked_posts(self, bookmarks) -> list:
+        """Method returns list of all bookmarked posts"""
         found_posts = []
         posts = self.load_posts()
         for post_id in bookmarks:
@@ -115,16 +130,20 @@ class PostManager:
             return found_posts
 
     def search_for_posts(self, query) -> list:
+        """Method returns list of all posts which have substring in content"""
         found_posts = []
         posts = self.load_posts()
         for post in posts.values():
             if post.has_substring(query):
                 found_posts.append(post)
+            if len(found_posts) == config.SEARCH_LIM:
+                break
         if found_posts:
             return found_posts
 
 
 class Post:
+    """Generic post class"""
 
     def __init__(self, pk, user, user_pic, pic, content, views, likes):
         self.pk = pk
@@ -155,13 +174,15 @@ class Post:
 
     def get_preview(self) -> str:
         """Function returns post content preview string"""
-        if len(self.content) > config.PREVIEW_LIM:
-            preview = self.content[0:config.PREVIEW_LIM] + '...'
+        if len(self.content_raw) > config.PREVIEW_LIM:
+            preview = self.content_raw[0:config.PREVIEW_LIM]
+            return self.convert_tags_to_links(preview) + '...'
         else:
-            preview = self.content
-        return self.convert_tags_to_links(preview)
+            preview = self.content_raw
+            return self.convert_tags_to_links(preview)
 
-    def get_comments_num(self):
+    def get_comments_num(self) -> str:
+        """Returns string with right declination of word based on comment number"""
         comment_num = len(self.comments)
 
         if 11 <= comment_num <= 19:
@@ -180,7 +201,7 @@ class Post:
         return comment_num_str
 
     def has_substring(self, substring) -> bool:
-        """Check if post content has requested substring"""
+        """Checks if post content has requested substring"""
         if substring.lower() in self.content_raw.lower():
             return True
         else:
@@ -188,6 +209,7 @@ class Post:
 
     @staticmethod
     def convert_tags_to_links(text):
+        """Converts all found words starting with # to HTML links"""
         text_list = text.split()
 
         for index, word in enumerate(text_list):
@@ -197,6 +219,7 @@ class Post:
 
 
 class Comment:
+    """Generic comment class"""
 
     def __init__(self, pk, post_id, user, comment):
         self.pk = pk
@@ -207,4 +230,3 @@ class Comment:
     def __repr__(self):
         rep = 'Comment(ID: ' + str(self.pk) + ', user: ' + self.commenter + ', post_id: ' + str(self.post_id) + ')'
         return rep
-
